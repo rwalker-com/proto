@@ -8,8 +8,6 @@ static const char* argv0;
 
 #define ERRBAIL(fmt,...) do { fprintf(stderr, "%s: error: "fmt"\n", argv0, __VA_ARGS__); exit(1); } while (0)
 
-
-
 #include <string.h>
 #define EVT_MASK_TO_STR_SIZE \
 sizeof(\
@@ -98,22 +96,22 @@ int main(int argc, const char **argv)
       }
 
       {
-         int   evtbuflen = 16;
-         char* evtbuf = (char*)malloc(sizeof(char)*evtbuflen);
+         int   buflen = 1024;
+         char* buf    = (char*)malloc(sizeof(char)*buflen);
 
          for (;;) {
             int n;
 
-            while ((n = read(fd, evtbuf, evtbuflen)) < 0 && (EINTR == errno));
+            while ((n = read(fd, buf, buflen)) < 0 && (EINTR == errno));
 
             if (0 == n || (n < 0 && EINVAL == errno)) {
-               evtbuflen*=2;
-               evtbuf = (char*)realloc(evtbuf, sizeof(char)*evtbuflen);
-               fprintf(stderr, "growing evtbuf to %d\n", evtbuflen);
+               buflen *= 2;
+               buf     = (char*)realloc(buf, sizeof(char)*buflen);
+               fprintf(stderr, "growing buf to %d\n", buflen);
             } else if (n < 0) {
                ERRBAIL("read event failed %d", errno);
             } else {
-               char* p = evtbuf;
+               char* p = buf;
                while (n >= sizeof(struct inotify_event)) {
                   struct inotify_event* evt = (struct inotify_event*)p;
                   char combo[EVT_MASK_TO_STR_SIZE];
