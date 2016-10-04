@@ -74,7 +74,7 @@ Input   Output
 #define ASSERT(x) do { if (!(x)) { fprintf(stderr,"assertion failed: %s\n", #x); exit(1); } } while (0)
 
 /* #define DEBUG(...) fprintf(stderr, __VA_ARGS__) */
-#define DEBUG(...) 0
+#define DEBUG(...) (void)0
 
 typedef struct poi    poi;
 typedef struct street street;
