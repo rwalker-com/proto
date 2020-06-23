@@ -1,56 +1,52 @@
 
-#include <ctype.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <assert.h>
 
-size_t binlog(const uint8_t * bytes, size_t bytes_len, char * out,
-              size_t out_len)
+static size_t odc(const uint8_t * bytes, size_t bytes_len, char * out,
+                  size_t out_len)
 {
     size_t required = 1; // always need null termination
-    if (out_len != 0)
-    {
-        *out = '\0';
-    }
+    memset(out, 0, out_len);
     // count and print
     for (; bytes_len > 0; bytes_len--, bytes++)
     {
         uint8_t byte = *bytes;
 
-        if (isprint(byte) && byte != '\\')
+        if ((byte >= '\t' && byte <= '\r') || byte == '\\')
         {
-            required += 1;
-            if (out_len > 1)
-            {
-                snprintf(out, 2, "%c", byte);
-                out_len--;
-                out++;
-            }
-        }
-        else if (byte == '\\' || byte == '\n' || byte == '\t' || byte == '\f' ||
-                 byte == '\v' || byte == '\r')
-        {
-            static const char * kCodes = "hnvlr";
+            static const char * kCodes = "tnvfr";
             char code = (byte == '\\') ? '\\' : kCodes[byte - '\t'];
             required += 2;
             if (out_len > 2)
             {
-                snprintf(out, 3, "\\%c", code);
+                *out++ = '\\';
+                *out++ = code;
                 out_len -= 2;
-                out += 2;
+            }
+        }
+        else if (byte >= ' ' && byte <= '~')
+        {
+            required += 1;
+            if (out_len > 1)
+            {
+                *out++ = byte;
+                out_len--;
             }
         }
         else
         {
             static const size_t kBinCodeLen = sizeof("\\xFF") - 1;
+            static const char * kCodes      = "0123456789ABCDEF";
 
             required += kBinCodeLen;
             if (out_len > kBinCodeLen)
             {
-                snprintf(out, kBinCodeLen + 1, "\\x%02X", byte);
+                *out++ = '\\';
+                *out++ = 'x';
+                *out++ = kCodes[(byte & 0xf0) >> 4];
+                *out++ = kCodes[byte & 0xf];
                 out_len -= kBinCodeLen;
-                out += kBinCodeLen;
             }
         }
     }
@@ -63,6 +59,9 @@ struct Out
     char lguard;
     char out[1024];
 };
+
+#include <stdio.h>
+#include <assert.h>
 
 bool check_out(Out & out, size_t out_len, const char * expected)
 {
@@ -108,30 +107,39 @@ int main(void)
     memset(out.out, 0xFE, sizeof(out.out));
 
     // simplest case, nothing written
-    assert(binlog(NULL, 0, NULL, 0) == 1 && check_out(out, 0, ""));
+    assert(odc(NULL, 0, NULL, 0) == 1 && check_out(out, 0, ""));
 
     // simple case
-    assert(binlog((const uint8_t *) "a", 1, out.out, 1) == 2 &&
+    assert(odc((const uint8_t *) "a", 1, out.out, 1) == 2 &&
            check_out(out, 1, ""));
 
     // simple case one written
-    assert(binlog((const uint8_t *) "a", 1, out.out, 2) == 2 &&
+    assert(odc((const uint8_t *) "a", 1, out.out, 2) == 2 &&
            check_out(out, 2, "a"));
 
     // getting more complicated
-    assert(binlog((const uint8_t *) "\xff", 1, out.out, 1) == 5);
+    assert(odc((const uint8_t *) "\xff", 1, out.out, 1) == 5);
     assert(check_out(out, 1, ""));
+
+    // C-style escapes
+    printf("%lu\n", odc((const uint8_t *) "\t", 1, out.out, 3));
+    assert(odc((const uint8_t *) "\t", 1, out.out, 3) == 3);
+    assert(check_out(out, 3, "\\t"));
+
+    // C-style escapes
+    assert(odc((const uint8_t *) "\x0a", 1, out.out, 3) == 3);
+    assert(check_out(out, 3, "\\n"));
 
     // nothing output if we need 4 chars
     for (size_t out_len = 0; out_len < 5; out_len++)
     {
-        assert(binlog((const uint8_t *) "\xff", 1, out.out, out_len) == 5);
+        assert(odc((const uint8_t *) "\xff", 1, out.out, out_len) == 5);
 
         assert(check_out(out, out_len, ""));
     }
 
     // finally got something
-    assert(binlog((const uint8_t *) "\xff", 1, out.out, 5) == 5);
+    assert(odc((const uint8_t *) "\xff", 1, out.out, 5) == 5);
     assert(check_out(out, 5, "\\xFF"));
 
     uint8_t buf[256];
@@ -139,10 +147,10 @@ int main(void)
     {
         buf[i] = i & 255;
     }
-    assert(binlog(buf, sizeof(buf), out.out, sizeof(out.out)) == 731);
+    assert(odc(buf, sizeof(buf), out.out, sizeof(out.out)) == 731);
     assert(check_out(
         out, sizeof(out.out),
-        "\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\h\\n\\v\\l\\r\\x0E\\x0F"
+        "\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\t\\n\\v\\f\\r\\x0E\\x0F"
         "\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1A\\x1B\\x1C\\x1D"
         "\\x1E\\x1F "
         "!\"#$%&'()*+,-./"
@@ -161,5 +169,7 @@ int main(void)
 
     buf[255] = '\0';
     printf("%s\n", buf + 1);
+    odc(buf, sizeof(buf), out.out, sizeof(out.out));
+    printf("%s\n", out.out);
     return 0;
 }
