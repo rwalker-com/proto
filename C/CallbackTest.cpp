@@ -1,8 +1,10 @@
+#include <stdio.h>
+
 #include "Callback.h"
 
 using namespace chip::Zcl;
 
-class Resumer
+class Resumer : public CallbackQueue
 {
 public:
     /**
@@ -12,36 +14,12 @@ public:
     {
         // always first thing: cancel to take ownership of
         //  cb members
-        CallbackInner * inner = cb->Cancel();
-
-        // add to a doubly-linked list
-        inner->mPrev       = mHead.mPrev;
-        mHead.mPrev->mNext = inner;
-        mHead.mPrev        = inner;
-        inner->mNext       = &mHead;
-        inner->mCancel     = Resumer::Cancel;
+        Enqueue(cb->Cancel());
     };
-
-    Resumer() : mHead() { mHead.mNext = mHead.mPrev = &mHead; };
 
     void Dispatch()
     {
-        // empty? we're done
-        if (mHead.mNext == &mHead)
-        {
-            return;
-        }
-
-        // move everything to a ready list
-        CallbackInner ready;
-
-        ready.mNext        = mHead.mNext;
-        ready.mPrev        = mHead.mPrev;
-        ready.mPrev->mNext = &ready;
-        ready.mNext->mPrev = &ready;
-
-        mHead.mNext = mHead.mPrev = &mHead;
-
+        CallbackInner ready = DequeueAll();
         // runs the ready list
         while (ready.mNext != &ready)
         {
@@ -49,17 +27,6 @@ public:
             cb->Run()(cb->mContext);
         }
     }
-
-    static void Cancel(CallbackInner * inner)
-    {
-        inner->mNext->mPrev = inner->mPrev;
-        inner->mPrev->mNext = inner->mNext;
-        inner->mNext = inner->mPrev = inner;
-        inner->mCancel              = NULL;
-    }
-
-private:
-    CallbackInner mHead;
 };
 
 static void increment(int * v)
@@ -76,6 +43,11 @@ struct Resume
 static void resume(struct Resume * me)
 {
     me->resumer->Resume(me->cb);
+}
+
+static void canceler(CallbackInner * inner)
+{
+    inner->Cancel();
 }
 
 #include <stdio.h>
@@ -95,7 +67,7 @@ static int ResumerTest(void)
 
     int n = 1;
     Callback<> cb((void (*)(void *)) increment, &n);
-    Callback<> cancelcb((void (*)(void *)) Resumer::Cancel, &cb);
+    Callback<> cancelcb((void (*)(void *)) canceler, cb.Cancel());
     Resumer resumer;
 
     // Resume() works
@@ -160,21 +132,24 @@ public:
             cb->Run()(cb->mContext, v);
         }
     }
-    static void Cancel(CallbackInner * cb) { Dequeue(cb); }
 
-    // always first thing: cancel to take ownership of
-    //  cb members, then enqueue
-    void Register(Callback<NotifyFn> * cb) { Enqueue(cb->Cancel()); }
+    /**
+     * @brief example
+     */
+    static void Cancel(CallbackInner * cb)
+    {
+        Dequeue(cb); // take off ready list
+    }
+
+    /**
+     * @brief illustrate a case where this needs notification of cancellation
+     */
+    void Register(Callback<NotifyFn> * cb) { Enqueue(cb->Cancel(), Cancel); }
 };
 
 static void increment_by(int * n, int by)
 {
     *n += by;
-}
-
-static void canceler(CallbackInner * inner)
-{
-    inner->Cancel();
 }
 
 static int NotifierTest(void)
@@ -190,7 +165,7 @@ static int NotifierTest(void)
 
     Notifier notifier;
 
-    // Simple stuff works
+    // Simple stuff works, e.g. persistent registration
     notifier.Register(&cb);
     notifier.Notify(1);
     notifier.Register(&cb);

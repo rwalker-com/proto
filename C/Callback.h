@@ -140,20 +140,31 @@ public:
     static Callback * FromInner(CallbackInner * inner) { return static_cast<Callback *>(inner); }
 };
 
+/**
+ * @brief core of a simple doubly-linked list Callback keeper-tracker-of
+ *
+ *
+ */
 class CallbackQueue
 {
 public:
     /**
-     * @brief run this callback next Notify
+     * @brief appends
      */
-    void Enqueue(CallbackInner * inner)
+    void Enqueue(CallbackInner * inner) { Enqueue(inner, Dequeue); };
+
+    /**
+     * @brief appends with overridden cancel function, in case the
+     *   list change requires some other state update.
+     */
+    void Enqueue(CallbackInner * inner, void (*cancel)(CallbackInner *))
     {
         // add to a doubly-linked list, set cancel function
         inner->mPrev       = mHead.mPrev;
         mHead.mPrev->mNext = inner;
         mHead.mPrev        = inner;
         inner->mNext       = &mHead;
-        inner->mCancel     = Dequeue;
+        inner->mCancel     = cancel;
     };
 
     CallbackQueue() : mHead() { mHead.mNext = mHead.mPrev = &mHead; };
