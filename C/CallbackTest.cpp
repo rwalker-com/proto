@@ -111,6 +111,19 @@ static int ResumerTest(void)
     resumer.Dispatch();
     EXPECT(n == 3);
 
+    Callback<> * pcb = new Callback<>((void (*)(void *)) increment, &n);
+
+    n = 1;
+    // cancel on destruct
+    resumer.Resume(pcb);
+    resumer.Dispatch();
+    EXPECT(n == 2);
+
+    resumer.Resume(pcb);
+    delete pcb;
+    resumer.Dispatch();
+    EXPECT(n == 2);
+
     return surprises;
 }
 

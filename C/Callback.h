@@ -80,6 +80,7 @@ public:
         }
         return this;
     }
+    ~CallbackInner() { Cancel(); };
 };
 
 /**
