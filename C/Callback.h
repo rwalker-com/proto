@@ -67,15 +67,15 @@ public:
     CallbackInner()
     {
         mNext = mPrev = this;
-        mCancel       = NULL;
+        mCancel       = nullptr;
     };
 
     CallbackInner * Cancel()
     {
-        if (mCancel != NULL)
+        if (mCancel != nullptr)
         {
             void (*cancel)(CallbackInner *) = mCancel;
-            mCancel                         = 0;
+            mCancel                         = nullptr;
             cancel(this);
         }
         return this;
@@ -94,9 +94,11 @@ public:
  *     the Callback save usercontext are "owned" by the callee, and should not
  *     be touched unless Cancel() has first been called.
  *    When a callee accepts a Callback for registration, step one is always Cancel(),
- *     in order to take ownership of next, prev, info_ptr, and info_scalar.
- *    Since this class does not define the notification function prototype, its intended
- *     use is as a base class for callback functions of various signatures.
+ *     in order to take ownership of Inner members next, prev, info_ptr, and info_scalar.
+ *    This template class also defines a default notification function prototype.
+ *
+ *   One-shot semantics can be accomplished by calling Cancel() on
+ *
  *
  */
 template <class T = void (*)(void *)>
@@ -104,36 +106,31 @@ class Callback : private CallbackInner
 {
 public:
     /**
-     *  owned by the caller, the caller's user context
+     * pointer to owner context, normally passed to the run function
      */
     void * mContext;
 
     /**
      * where to call when the event of interest has occured
      */
-    T mRun;
+    T mCall;
 
     /**
-     * run enforces one-shot semantics
+     * Indication that the Callback is registered with a notifier
      */
-    T Run()
-    {
-        Cancel();
-        return mRun;
-    }
-
-    bool IsRegistered() { return (mCancel != NULL); }
+    bool IsRegistered() { return (mCancel != nullptr); }
 
     /**
      * Cancel, i.e. de-register interest in the event,
-     *  this is the only way to get access to the Inner
+     *  this is the only way to get access to the Inner, to enqueue,
+     *  store any per-registration state
      */
     CallbackInner * Cancel() { return CallbackInner::Cancel(); };
 
     /**
      * public constructor
      */
-    Callback(T run, void * context) : mRun(run), mContext(context) { CallbackInner(); };
+    Callback(T call, void * context) : mCall(call), mContext(context) { CallbackInner(); };
 
     /**
      * TODO: type-safety?
@@ -144,9 +141,8 @@ public:
 /**
  * @brief core of a simple doubly-linked list Callback keeper-tracker-of
  *
- *
  */
-class CallbackQueue
+class CallbackDeque
 {
 public:
     /**
@@ -161,6 +157,7 @@ public:
     void Enqueue(CallbackInner * inner, void (*cancel)(CallbackInner *))
     {
         // add to a doubly-linked list, set cancel function
+        inner->Cancel(); // make doubly-sure we're not corrupting another list somewhere
         inner->mPrev       = mHead.mPrev;
         mHead.mPrev->mNext = inner;
         mHead.mPrev        = inner;
@@ -168,10 +165,11 @@ public:
         inner->mCancel     = cancel;
     };
 
-    CallbackQueue() : mHead() { mHead.mNext = mHead.mPrev = &mHead; };
+    CallbackDeque() : mHead() { mHead.mNext = mHead.mPrev = &mHead; };
 
     /**
-     * Dequeue all, return in a stub
+     * Dequeue all, return in a stub. does not cancel the inners, as the list
+     *   members are still in use
      */
     CallbackInner DequeueAll()
     {
@@ -194,10 +192,9 @@ public:
         inner->mNext->mPrev = inner->mPrev;
         inner->mPrev->mNext = inner->mNext;
         inner->mNext = inner->mPrev = inner;
-        inner->mCancel              = NULL;
+        inner->mCancel              = nullptr;
     }
 
-private:
     CallbackInner mHead;
 };
 

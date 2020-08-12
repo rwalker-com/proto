@@ -4,7 +4,7 @@
 
 using namespace chip::Zcl;
 
-class Resumer : public CallbackQueue
+class Resumer : private CallbackDeque
 {
 public:
     /**
@@ -24,7 +24,10 @@ public:
         while (ready.mNext != &ready)
         {
             Callback<> * cb = Callback<>::FromInner(ready.mNext);
-            cb->Run()(cb->mContext);
+
+            // one-shot semantics
+            cb->Cancel();
+            cb->mCall(cb->mContext);
         }
     }
 };
@@ -127,7 +130,7 @@ static int ResumerTest(void)
     return surprises;
 }
 
-class Notifier : public CallbackQueue
+class Notifier : private CallbackDeque
 {
 public:
     typedef void (*NotifyFn)(void *, int);
@@ -137,12 +140,12 @@ public:
      */
     void Notify(int v)
     {
-        CallbackInner ready = DequeueAll();
-        while (ready.mNext != &ready)
+        for (CallbackInner * inner = mHead.mNext; inner != &mHead; inner = inner->mNext)
         {
-            //  Callbacks are one-shot, also removes item from ready
-            Callback<NotifyFn> * cb = Callback<NotifyFn>::FromInner(ready.mNext);
-            cb->Run()(cb->mContext, v);
+            // persistent registration semantics, with data
+
+            Callback<NotifyFn> * cb = Callback<NotifyFn>::FromInner(inner);
+            cb->mCall(cb->mContext, v);
         }
     }
 
@@ -178,10 +181,9 @@ static int NotifierTest(void)
 
     Notifier notifier;
 
-    // Simple stuff works, e.g. persistent registration
+    // Simple stuff works, e.g. and there's persistent registration
     notifier.Register(&cb);
     notifier.Notify(1);
-    notifier.Register(&cb);
     notifier.Notify(8);
     EXPECT(n == 10);
 
