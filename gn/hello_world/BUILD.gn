@@ -1,0 +1,59 @@
+declare_args() {
+  # defaults
+  default_greeting = "dunno"
+}
+
+declare_args() {
+  # defaults
+  current_greeting = default_greeting
+}
+
+declare_args() {
+  greeting = current_greeting
+}
+
+template("hello") {
+  _who = target_name
+  _who = invoker.who # this template must reference both target_name and invoker
+
+  action("hello_${_who}") {
+    hello = "${root_gen_dir}/hello_${_who}"
+    outputs = [ hello ]
+    script = "echo_into.py"
+    args = [
+      rebase_path(hello, root_build_dir),
+      greeting,
+      _who,
+    ]
+  }
+}
+
+if (current_toolchain != "//.gn.d/toolchains:dummy") {
+  whos = [
+    "world",
+    "you",
+  ]
+  foreach(who, whos) {
+    hello(who) {
+      who = who
+    }
+  }
+  group("all") {
+    deps = []
+    foreach(who, whos) {
+      deps += [ ":hello_${who}" ]
+    }
+  }
+} else {
+  group("all") {
+    deps = []
+    foreach(lang,
+        [
+          "english",
+          "french",
+    ]) {
+      toolchain = "//.gn.d/toolchains:$lang"
+      deps += [ ":all(${toolchain})" ]
+    }
+  }
+}
