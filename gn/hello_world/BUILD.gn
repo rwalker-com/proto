@@ -6,12 +6,7 @@ declare_args() {
 }
 
 declare_args() {
-  # defaults
-  current_greeting = default_greeting
-}
-
-declare_args() {
-  greeting = current_greeting
+  greeting = default_greeting
 }
 
 template("hello") {

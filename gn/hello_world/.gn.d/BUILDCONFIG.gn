@@ -1,3 +1,4 @@
 # minimal BUILDCONFIG.gn
 set_default_toolchain("toolchains:dummy")
 # I don't understand why this can't be in //.gn
+print("hi")
