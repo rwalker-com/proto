@@ -25,7 +25,7 @@ template("hello") {
   }
 }
 
-if (current_toolchain != "//.gn.d/toolchains:dummy") {
+if (current_toolchain != "//.gn.d:dummy") {
   whos = [
     "world",
     "you",
@@ -48,7 +48,7 @@ if (current_toolchain != "//.gn.d/toolchains:dummy") {
           "english",
           "french",
     ]) {
-      toolchain = "//.gn.d/toolchains:$lang"
+      toolchain = "//.gn.d:$lang"
       deps += [ ":all(${toolchain})" ]
     }
   }
