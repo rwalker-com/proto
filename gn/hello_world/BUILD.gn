@@ -1,3 +1,5 @@
+# project has to have a BUILD.gn in addition to a .gn?
+
 declare_args() {
   # defaults
   default_greeting = "dunno"
@@ -14,7 +16,7 @@ declare_args() {
 
 template("hello") {
   _who = target_name
-  _who = invoker.who # this template must reference both target_name and invoker
+  not_needed(invoker, "*")
 
   action("hello_${_who}") {
     hello = "${root_gen_dir}/hello_${_who}"
@@ -35,7 +37,6 @@ if (current_toolchain != "//.gn.d/toolchains:dummy") {
   ]
   foreach(who, whos) {
     hello(who) {
-      who = who
     }
   }
   group("all") {
